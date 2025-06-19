@@ -1,0 +1,12 @@
+#### Health Check
+GET  http://localhost:8000/health
+
+#### Create Shortener
+POST  http://localhost:8000/shortener/
+Content-Type: application/json
+
+{
+    "url": "https://www.example.com"
+}
+
+####

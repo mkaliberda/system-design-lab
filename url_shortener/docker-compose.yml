@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.11
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --entrypoints.web.address=:8000
+    ports:
+      - "8000:8000"
+      - "8080:8080" # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - service_shortener
+
+  service_shortener:
+    build: .
+    command: uvicorn src.main:app --host 0.0.0.0
+    volumes:
+      - .:/app
+    environment:
+      - BASE_URL=http://localhost:8000
+      - MEMCACHED_HOST=memcached
+      - MEMCACHED_PORT=11211
+      - DATABASE_URL_SHORTENER=postgresql://postgres:password@db:5432/url_shortener_db
+      - DB_SHORTENER_POOL_SIZE=10
+      - DB_SHORTENER_MAX_OVERFLOW=20
+    deploy:
+      replicas: 10
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+    depends_on:
+        - db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.shortener.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.shortener.entrypoints=web"
+      - "traefik.http.services.shortener.loadbalancer.server.port=8000"
+      - "traefik.http.services.shortener.loadbalancer.healthcheck.path=/health/"
+      - "traefik.http.services.shortener.loadbalancer.healthcheck.interval=50s"
+      - "traefik.http.services.shortener.loadbalancer.healthcheck.timeout=1s"
+
+  db:
+    image: postgres:15
+    container_name: url_shortener_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: url_shortener_db
+    command: ["postgres", "-c", "max_connections=200"]
+    ports:
+      - "5432:5432"
+    # volumes:
+    #   - pgdata:/var/lib/postgresql/data
+
+  locust:
+    image: locustio/locust:2.24.1
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py
+    ports:
+      - "8089:8089" #
+    command: >
+      -f /mnt/locust/locustfile.py
+      -H http://service_shortener:8000
+      -u 50000
+      -r 3000
+      -t 1m
+    depends_on:
+      - service_shortener
+
+# volumes:
+#   pgdata:
+
