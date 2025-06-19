@@ -28,13 +28,13 @@ services:
       - DB_SHORTENER_POOL_SIZE=10
       - DB_SHORTENER_MAX_OVERFLOW=20
     deploy:
-      replicas: 10
+      replicas: 5
       resources:
         limits:
-          cpus: '0.5'
+          cpus: '1'
           memory: 128M
         reservations:
-          cpus: '0.5'
+          cpus: '1'
           memory: 128M
     depends_on:
         - db
@@ -70,8 +70,8 @@ services:
     command: >
       -f /mnt/locust/locustfile.py
       -H http://service_shortener:8000
-      -u 50000
-      -r 3000
+      -u 1000
+      -r 100
       -t 1m
     depends_on:
       - service_shortener
