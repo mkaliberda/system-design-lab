@@ -6,7 +6,7 @@ services:
     command:
       - --api.insecure=true
       - --providers.docker=true
-      - --entrypoints.web.address=:8000
+      - --entrypoints.shortener.address=:8000
     ports:
       - "8000:8000"
       - "8080:8080" # Traefik dashboard
@@ -22,34 +22,33 @@ services:
       - .:/app
     environment:
       - BASE_URL=http://localhost:8000
-      - MEMCACHED_HOST=memcached
-      - MEMCACHED_PORT=11211
       - DATABASE_URL_SHORTENER=postgresql://postgres:password@db:5432/url_shortener_db
+      - CACHE_COUNTER_HOST=redis://redis-counter:6379
       - DB_SHORTENER_POOL_SIZE=10
       - DB_SHORTENER_MAX_OVERFLOW=20
     deploy:
-      replicas: 5
+      replicas: 1
       resources:
         limits:
-          cpus: '1'
+          cpus: '0.25'
           memory: 128M
         reservations:
-          cpus: '1'
+          cpus: '0.25'
           memory: 128M
     depends_on:
         - db
+        - redis-counter
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.shortener.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.shortener.entrypoints=web"
+      - "traefik.http.routers.shortener.entrypoints=shortener"
       - "traefik.http.services.shortener.loadbalancer.server.port=8000"
       - "traefik.http.services.shortener.loadbalancer.healthcheck.path=/health/"
-      - "traefik.http.services.shortener.loadbalancer.healthcheck.interval=50s"
+      - "traefik.http.services.shortener.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.shortener.loadbalancer.healthcheck.timeout=1s"
 
   db:
     image: postgres:15
-    container_name: url_shortener_db
     restart: always
     environment:
       POSTGRES_USER: postgres
@@ -60,6 +59,13 @@ services:
       - "5432:5432"
     # volumes:
     #   - pgdata:/var/lib/postgresql/data
+
+  redis-counter:
+    image: redis:7.0
+    restart: always
+
+    ports:
+      - "6379:6379"
 
   locust:
     image: locustio/locust:2.24.1
@@ -77,5 +83,5 @@ services:
       - service_shortener
 
 # volumes:
-#   pgdata:
+#   redis-primary-data:
 

@@ -2,6 +2,7 @@ import abc
 import string
 import random
 from .config import get_config
+from .alias_counter import AliasCounter
 from ...models import URL
 
 config = get_config()
@@ -17,15 +18,11 @@ class AbstractAliasStrategy(abc.ABC):
 class CounterAliasStrategy(AbstractAliasStrategy):
 
     ALPHABET = string.ascii_letters + string.digits  # Base62 characters
-    COUNTER_KEY = "alias_counter_value"  # Key for storing counter in memcache
 
-    def _initialize_counter(self):
-        # TODO implement memcache client initialization
-        pass
-
-    def _increment_counter(self) -> int:
-        # TODO implement memcache client initialization
-        return
+    def __init__(self, alias_counter: AliasCounter):
+        if not isinstance(alias_counter, AliasCounter):
+            raise TypeError("alias_counter must be an instance of AliasCounter.")
+        self.alias_counter = alias_counter
 
     def _encode_to_base62(self, num: int) -> str:
         """Converts an integer to a base62 string."""
@@ -45,8 +42,9 @@ class CounterAliasStrategy(AbstractAliasStrategy):
         using the provided session and memcache client for alias existence checks.
         """
         # Counter logic now uses memcache_client
-        counter_value = self._increment_counter()
+        counter_value = self.alias_counter.next()
         alias = self._encode_to_base62(counter_value)
+        print(f"Generated alias: {alias} from counter value: {counter_value}")
 
         if len(alias) < length:
             # fill leading chars
@@ -115,14 +113,14 @@ class AliasGenerator:
         raise RuntimeError("Failed to generate a unique alias after retries.")
 
 
-def get_alias_generator() -> AliasGenerator:
+def get_alias_generator(alias_counter: AliasCounter) -> AliasGenerator:
     """
     Returns a default alias generator with the CounterAliasStrategy.
     This can be used as a singleton instance in the application.
     """
     strategy_type = config.alias_generation_strategy
     if strategy_type == config.COUNTER_ALIAS_GENERATION:
-        strategy = CounterAliasStrategy()
+        strategy = CounterAliasStrategy(alias_counter)
     else:
         strategy = RandomAliasStrategy()
 

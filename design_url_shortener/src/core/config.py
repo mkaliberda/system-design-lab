@@ -27,6 +27,18 @@ class Config:
     def db_max_overflow(self):
         return int(os.getenv("DB_SHORTENER_MAX_OVERFLOW", "20"))
 
+    @property
+    def cache_counter_host(self):
+        return str(os.getenv("CACHE_COUNTER_HOST", "redis://localhost:6379"))
+
+    @property
+    def cache_counter_range_size(self):
+        return int(os.getenv("CACHE_COUNTER_RANGE_SIZE", "100"))
+
+    @property
+    def cache_counter_key(self):
+        return str(os.getenv("CACHE_COUNTER_KEY", "alias_counter"))
+
 
 def get_config() -> Config:
     """

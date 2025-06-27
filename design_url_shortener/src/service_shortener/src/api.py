@@ -35,7 +35,9 @@ router = APIRouter(tags=["service_shortener"])
 
 @router.post("/")
 def create_shortener(
-    request: Request, request_data: URLCreateRequest, db: Session = Depends(get_db)
+    request: Request,
+    request_data: URLCreateRequest,
+    db: Session = Depends(get_db),
 ):
     """
     Endpoint to create a new URL shortener service.
@@ -54,7 +56,9 @@ def create_shortener(
 
     else:
         try:
-            alias = get_alias_generator().generate_alias(db=db)
+            alias = get_alias_generator(request.app.state.alias_counter).generate_alias(
+                db=db
+            )
         except RuntimeError as e:
             raise HTTPException(
                 status_code=400,

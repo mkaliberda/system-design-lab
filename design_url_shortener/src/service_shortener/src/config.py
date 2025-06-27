@@ -20,12 +20,12 @@ class ShortenerConfig(Config):
 
     @property
     def alias_generation_retries(self):
-        return int(os.getenv("ALIAS_GENERATION_RETRIES", 5))
+        return int(os.getenv("ALIAS_GENERATION_RETRIES", 1))
 
     @property
     def alias_generation_strategy(self):
         return os.getenv(
-            "ALIAS_GENERATION_STRATEGY", self.RANDOM_ALIAS_GENERATION
+            "ALIAS_GENERATION_STRATEGY", self.COUNTER_ALIAS_GENERATION
         ).lower()
 
 
