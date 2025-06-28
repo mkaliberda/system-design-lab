@@ -1,12 +1,10 @@
-from typing import Union
-
-from fastapi import FastAPI
-from .service_shortener.src.api import router as shortener_router
-from .common.routers import router as common_router
-from .service_shortener.src.alias_generator import AliasCounter
-from .core.db import init_db
-from .core import get_db, get_config, get_cache_counter_client
 import redis
+from fastapi import FastAPI
+from .common.routers import router as common_router
+from .service_shortener.src.api import router as shortener_router
+from .service_redirect.src.api import router as redirect_router
+from .service_shortener.src.alias_generator import AliasCounter
+from .core import get_db, init_db, get_config, get_cache_counter_client
 
 config = get_config()
 
@@ -30,4 +28,5 @@ init_db()
 
 
 app.include_router(shortener_router, prefix="/shortener", tags=["service_shortener"])
+app.include_router(redirect_router, tags=["service_redirect"])
 app.include_router(common_router)

@@ -6,7 +6,9 @@ services:
     command:
       - --api.insecure=true
       - --providers.docker=true
-      - --entrypoints.shortener.address=:8000
+      - --entrypoints.web.address=:8000
+      - --log.level=DEBUG # For debugging
+      - --accesslog=true # For debugging
     ports:
       - "8000:8000"
       - "8080:8080" # Traefik dashboard
@@ -27,25 +29,68 @@ services:
       - DB_SHORTENER_POOL_SIZE=10
       - DB_SHORTENER_MAX_OVERFLOW=20
     deploy:
-      replicas: 1
+      replicas: 2
       resources:
         limits:
           cpus: '0.25'
-          memory: 128M
+          memory: 64M
         reservations:
           cpus: '0.25'
-          memory: 128M
+          memory: 64M
+
     depends_on:
         - db
         - redis-counter
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.shortener.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.shortener.entrypoints=shortener"
+      - "traefik.http.routers.shortener.rule=PathPrefix(`/`) && Method(`POST`)"
+      - "traefik.http.routers.shortener.entrypoints=web"
+
+      - "traefik.http.routers.shortener.middlewares=shortener-strip"
       - "traefik.http.services.shortener.loadbalancer.server.port=8000"
+      # Middleware to rewrite / to /service_shortener
+      - "traefik.http.middlewares.shortener-strip.replacepathregex.regex=^/$"
+      - "traefik.http.middlewares.shortener-strip.replacepathregex.replacement=/shortener/?" # add or /sh
+    
       - "traefik.http.services.shortener.loadbalancer.healthcheck.path=/health/"
       - "traefik.http.services.shortener.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.shortener.loadbalancer.healthcheck.timeout=1s"
+
+  service_redirect:
+    build: .
+    command: uvicorn src.main:app --host 0.0.0.0
+    volumes:
+      - .:/app
+    environment:
+      - BASE_URL=http://localhost:8000
+      - DATABASE_URL_SHORTENER=postgresql://postgres:password@db:5432/url_shortener_db
+      - CACHE_COUNTER_HOST=redis://redis-counter:6379
+      - DB_SHORTENER_POOL_SIZE=10
+      - DB_SHORTENER_MAX_OVERFLOW=20
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+
+    depends_on:
+        - db
+        - redis-counter
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redirect.rule=PathPrefix(`/`) && Method(`GET`)"
+      - "traefik.http.routers.redirect.entrypoints=web"
+
+      - "traefik.http.services.redirect.loadbalancer.server.port=8000"
+      # Middleware to rewrite / to /service_shortener
+    
+      - "traefik.http.services.redirect.loadbalancer.healthcheck.path=/health/"
+      - "traefik.http.services.redirect.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.services.redirect.loadbalancer.healthcheck.timeout=1s"
 
   db:
     image: postgres:15

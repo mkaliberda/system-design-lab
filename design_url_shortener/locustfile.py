@@ -18,14 +18,13 @@ class AliasGeneratorUser(HttpUser):
     host = "http://localhost:8000"
 
     # You can adjust the task weights if you want a different distribution
-    @task(3)  # This task will be run 3 times more often than the counter task
+    @task(3)  # This task will be run 3 time
     def generate_random_alias(self):
-        """Simulates a user generating a random alias."""
-        url = f"https://example.com/long-url-{random.randint(1, 1_000_000)}"
-        self.client.post(
-            "/shortener/",
-            json={
-                "url": url,
-            },
-            name="/shortener/",  # Custom name for statistics
-        )
+        # Replace with your actual POST data
+        response = self.client.post("/shortener/", json={"url": "https://example.com"})
+        if response.status_code == 200:
+            short_url = response.json().get("short_url")
+            if short_url:
+                # After every 100 generations, try to open a random one
+                for _ in range(100):
+                    self.client.get(short_url)
