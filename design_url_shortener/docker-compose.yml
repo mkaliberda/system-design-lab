@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.11
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --entrypoints.web.address=:8000
+      - --log.level=DEBUG # For debugging
+      - --accesslog=true # For debugging
+    ports:
+      - "8000:8000"
+      - "8080:8080" # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - service_shortener
+
+  service_shortener:
+    build: .
+    command: uvicorn src.main:app --host 0.0.0.0
+    volumes:
+      - .:/app
+    environment:
+      - BASE_URL=http://localhost:8000
+      - DATABASE_URL_SHORTENER=postgresql://postgres:password@db:5432/url_shortener_db
+      - CACHE_COUNTER_HOST=redis://redis-counter:6379
+      - DB_SHORTENER_POOL_SIZE=10
+      - DB_SHORTENER_MAX_OVERFLOW=20
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+
+    depends_on:
+        - db
+        - redis-counter
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.shortener.rule=PathPrefix(`/`) && Method(`POST`)"
+      - "traefik.http.routers.shortener.entrypoints=web"
+
+      - "traefik.http.routers.shortener.middlewares=shortener-strip"
+      - "traefik.http.services.shortener.loadbalancer.server.port=8000"
+      # Middleware to rewrite / to /service_shortener
+      - "traefik.http.middlewares.shortener-strip.replacepathregex.regex=^/$"
+      - "traefik.http.middlewares.shortener-strip.replacepathregex.replacement=/shortener/?" # add or /sh
+    
+      - "traefik.http.services.shortener.loadbalancer.healthcheck.path=/health/"
+      - "traefik.http.services.shortener.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.services.shortener.loadbalancer.healthcheck.timeout=1s"
+
+  service_redirect:
+    build: .
+    command: uvicorn src.main:app --host 0.0.0.0
+    volumes:
+      - .:/app
+    environment:
+      - BASE_URL=http://localhost:8000
+      - DATABASE_URL_SHORTENER=postgresql://postgres:password@db:5432/url_shortener_db
+      - CACHE_COUNTER_HOST=redis://redis-counter:6379
+      - DB_SHORTENER_POOL_SIZE=10
+      - DB_SHORTENER_MAX_OVERFLOW=20
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+
+    depends_on:
+        - db
+        - redis-counter
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redirect.rule=PathPrefix(`/`) && Method(`GET`)"
+      - "traefik.http.routers.redirect.entrypoints=web"
+
+      - "traefik.http.services.redirect.loadbalancer.server.port=8000"
+      # Middleware to rewrite / to /service_shortener
+    
+      - "traefik.http.services.redirect.loadbalancer.healthcheck.path=/health/"
+      - "traefik.http.services.redirect.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.services.redirect.loadbalancer.healthcheck.timeout=1s"
+
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: url_shortener_db
+    command: ["postgres", "-c", "max_connections=200"]
+    ports:
+      - "5432:5432"
+    # volumes:
+    #   - pgdata:/var/lib/postgresql/data
+
+  redis-counter:
+    image: redis:7.0
+    restart: always
+
+    ports:
+      - "6379:6379"
+
+  locust:
+    image: locustio/locust:2.24.1
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py
+    ports:
+      - "8089:8089" #
+    command: >
+      -f /mnt/locust/locustfile.py
+      -H http://service_shortener:8000
+      -u 1000
+      -r 100
+      -t 1m
+    depends_on:
+      - service_shortener
+
+# volumes:
+#   redis-primary-data:
+
